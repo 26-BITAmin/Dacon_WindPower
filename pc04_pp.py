@@ -14,7 +14,7 @@
 # 구성: 1-D 사다리(각 파라미터·w) → 상위 축 2-D 그리드. 후보 base 2개(v1 pcinv / R3 pchpo).
 #   선택 낙관 방어 = 홀드아웃·fold 일관 동시 확인 (exp-043/067과 동일 프로토콜).
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp086_pcpp.py
+# 실행: C:\miniconda3\python.exe -X utf8 pc04_pp.py
 # ═══════════════════════════════════════════════════════
 import argparse
 import sys

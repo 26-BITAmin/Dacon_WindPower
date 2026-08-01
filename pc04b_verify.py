@@ -12,7 +12,7 @@
 #   B. **선택 분리**: CV(4폴드)만으로 선택 → 그 셀의 홀드아웃을 독립 확인.
 #   C. **fold 분해**: 챔피언 대비 폴드별 Δ — Q1 편중 여부 확인.
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp086b_verify.py
+# 실행: C:\miniconda3\python.exe -X utf8 pc04b_verify.py
 # ═══════════════════════════════════════════════════════
 import sys
 import time

@@ -16,8 +16,8 @@
 #       점수가 매겨지는 공간에서 선택.
 #   트라이얼 0 = 현행 e56 하이퍼 강제 삽입 → 개선 폭 직접 측정.
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp085_pchpo.py --stage search --trials-lgb 20 --trials-xgb 16
-#       C:\miniconda3\python.exe -X utf8 exp085_pchpo.py --stage gate
+# 실행: C:\miniconda3\python.exe -X utf8 pc03_hpo.py --stage search --trials-lgb 20 --trials-xgb 16
+#       C:\miniconda3\python.exe -X utf8 pc03_hpo.py --stage gate
 # ═══════════════════════════════════════════════════════
 import argparse
 import json
@@ -35,7 +35,7 @@ from exp050_lambda_sweep import merge_cached_cols, save_cols
 from exp056_hpo import RESULT_JSON as E56_JSON, BASELINE_LGB, BASELINE_XGB
 from exp060_pergroup_hpo import load_cache_full, make_ev, print_table
 from exp065_gbm3 import build_train_frame, corr_on_eval, slice_fold
-from exp082_pcinv import make_transform, build_curve
+from pc01_pcinv import make_transform, build_curve
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")

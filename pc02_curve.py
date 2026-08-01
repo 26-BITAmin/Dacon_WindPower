@@ -19,8 +19,8 @@
 # 프로토콜 개선: 스모크를 **Q2+Q4 2폴드**로 (exp-079/082에서 Q4 단독 스모크가 전체
 #   CV를 3연속 과대평가한 관측 반영 — Q2/Q3가 항상 반대 부호였음).
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp084_pctrack.py --stage smoke
-#       C:\miniconda3\python.exe -X utf8 exp084_pctrack.py --stage gate --variants pcA
+# 실행: C:\miniconda3\python.exe -X utf8 pc02_curve.py --stage smoke
+#       C:\miniconda3\python.exe -X utf8 pc02_curve.py --stage gate --variants pcA
 # ═══════════════════════════════════════════════════════
 import argparse
 import json
@@ -38,7 +38,7 @@ from exp050_lambda_sweep import merge_cached_cols, save_cols
 from exp056_hpo import RESULT_JSON as E56_JSON
 from exp060_pergroup_hpo import load_cache_full, make_ev, print_table
 from exp065_gbm3 import build_train_frame, corr_on_eval, slice_fold
-from exp082_pcinv import make_transform
+from pc01_pcinv import make_transform
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")

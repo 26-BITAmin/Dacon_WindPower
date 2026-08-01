@@ -8,7 +8,7 @@
 # 검정: 실측 CF 구간별로 (a) 두 base의 평균 예측 CF, (b) FiCR 손실 기여를 분해.
 #   가설 참이면 고CF 구간에서만 pcinv가 낮고, 저·중 구간은 동급 이상이어야 함.
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp082b_diag.py
+# 실행: C:\miniconda3\python.exe -X utf8 pc01b_diag.py
 # ═══════════════════════════════════════════════════════
 import sys
 

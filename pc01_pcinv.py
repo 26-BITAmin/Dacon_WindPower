@@ -24,8 +24,8 @@
 #           gate  = 3-seed·4-fold+홀드아웃 → 제3 base 멤버 혼합 사다리 × dl_cln03
 #           판정 Δ = 보드 챔피언(hpo×dC_w65, 재현 기대 CV 0.6556 / HOLD 0.6535)
 #
-# 실행: C:\miniconda3\python.exe -X utf8 exp082_pcinv.py --stage smoke
-#       C:\miniconda3\python.exe -X utf8 exp082_pcinv.py --stage gate --variants pcinv,pcw
+# 실행: C:\miniconda3\python.exe -X utf8 pc01_pcinv.py --stage smoke
+#       C:\miniconda3\python.exe -X utf8 pc01_pcinv.py --stage gate --variants pcinv,pcw
 # ═══════════════════════════════════════════════════════
 import argparse
 import json
