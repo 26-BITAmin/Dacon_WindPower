@@ -9,14 +9,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```mermaid
 flowchart TD
     CLAUDE["CLAUDE.md<br/>진입점 · 문서 지도 · 작업 규칙"]
-    COMP["COMPETITION.md<br/>대회 규칙 · 평가 지표 공식(1-NMAE, FiCR)<br/>데이터 명세 요약 · 현재 파이프라인 · FiCR 전략"]
+    COMP["COMPETITION.md<br/>대회 규칙 · 평가 지표 공식(1-NMAE, FiCR)<br/>데이터 명세 요약 · 검증 체계"]
+    PIPE["PIPELINE.md<br/><b>현 챔피언(최고 성적) 파이프라인의 구체적 설명</b><br/>구성값 전체 + 왜 그 구성인지<br/>── 지금 뭐가 돌아가는지는 여기부터"]
     MODEL["MODEL.md<br/>모델 실험 기록: 무엇을 만들었고,<br/>결과가 어땠고, 왜 그랬는지<br/>── 메인 라인(exp-NNN) + 별도 트랙(PC-NN)"]
     AVAIL["AVAILABILITY.md<br/>연도별 가동률 실측 분석<br/>(SCADA 원자료, 모델·LB 독립)"]
     DESC["open (1)/data_description.md<br/>주최측 데이터 명세 원문"]
     NB["ensemble_q4fold.ipynb<br/>메인 파이프라인 코드 (wonwoo 브랜치)"]
     BASE["open (1)/train_ensemble.py<br/>초기 베이스라인 스크립트"]
     CLAUDE --> COMP
+    CLAUDE --> PIPE
     CLAUDE --> MODEL
+    PIPE -. 각 구성의 근거 실험 .-> MODEL
     MODEL -. 진단 상세 (exp-074) .-> AVAIL
     COMP -.-> DESC
     MODEL -. 실험 코드 .-> NB
@@ -25,8 +28,9 @@ flowchart TD
 
 ## 핵심 사실
 
-- **Score = 0.5×(1-NMAE) + 0.5×FiCR**. 실측 ≥ 설비용량 10%인 시간대만 평가. 공식·전략은 [COMPETITION.md](COMPETITION.md), 정확한 구현은 `ensemble_q4fold.ipynb`의 `metric()`.
+- **Score = 0.5×(1-NMAE) + 0.5×FiCR**. 실측 ≥ 설비용량 10%인 시간대만 평가. 공식·데이터 명세·검증 체계는 [COMPETITION.md](COMPETITION.md), 정확한 구현은 `ensemble_q4fold.ipynb`의 `metric()`. (COMPETITION.md 5절 "FiCR 개선 전략"은 **초기 가설 5개가 전부 기각된 종료 기록**이지 할 일 목록이 아니다.)
 - 리더보드에서 1-NMAE는 팀 간 차이가 작고 **FiCR에서 순위가 갈림** → FiCR 개선이 최우선 (1-NMAE도 함께 관리).
+- **현 챔피언 = `v_mix70_champ_pctrk_submit.csv` (LB public 0.65073, 2026-08-04).** 구성 = **0.7 × 메인 라인 챔피언(`ens3_w65_g3s97`, PIPELINE.md의 파이프라인) + 0.3 × 파워커브 트랙 R20(`pctrk_ens2d_g3s97`)** 의 제출값(post-PP) 평균. 두 파이프라인의 LB 프로파일이 상보적(메인=FiCR 0.4230·트랙=NMAE 0.8781)이라 혼합에서 두 지표 동반 상승(+0.0008/+0.0010). 메인 성분은 [PIPELINE.md](PIPELINE.md), 트랙 성분·혼합 근거는 MODEL.md `별도 트랙 A`(PC-13~26). 새 실험 제안 전에 두 문서를 먼저 읽을 것.
 
 ## 작업 규칙
 
