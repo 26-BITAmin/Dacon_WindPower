@@ -50,6 +50,11 @@ PATIENCE = 15
 WS_SWEEP = (0.60, 0.65, 0.70)
 DL_STORE = HERE.parent / "wi09_dl_es.parquet"
 CSV_OUT = HERE.parent / "wi09_results.csv"
+# eval 취합 대상 파일 명시 목록 — glob("wi09_dl_es*") 금지: 태그 불문 병합은 다른 구성
+# (시드 수·셀 정의)의 캐시를 조용히 섞는 exp-145형 사고 경로다. 새 태그 파일을 취합에
+# 넣으려면 여기에 의도적으로 추가할 것.
+EVAL_STORES = ("wi09_dl_es.parquet", "wi09_dl_es_c1.parquet", "wi09_dl_es_c2.parquet",
+               "wi09_dl_es_e1.parquet", "wi09_dl_es_e2.parquet")
 
 
 def val_mask(df):
@@ -156,9 +161,12 @@ def main():
     cols_new = [f"dl_{c}" for c in args.cells.split(",") if c]
     if args.stage == "eval":
         cols_new = ["dl_ctrl", "dl_es"]
-        for f in sorted(HERE.parent.glob("wi09_dl_es*.parquet")):
-            merge_cached_cols(cache, f, [c for c in cols_new if c not in cache.columns
-                                         or cache[c].isna().any()])
+        for fname in EVAL_STORES:
+            f = HERE.parent / fname
+            got = merge_cached_cols(cache, f, [c for c in cols_new if c not in cache.columns
+                                               or cache[c].isna().any()])
+            if got:
+                print(f"  [eval 취합] {fname} → {got}", flush=True)
         miss = [c for c in cols_new if c not in cache.columns or cache[c].isna().any()]
         assert not miss, f"미완성: {miss}"
     elif store.exists():
