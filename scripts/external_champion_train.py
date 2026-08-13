@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "external_champion_train.ipynb"
+OUT = ROOT / "notebooks" / "external_champion_train.ipynb"
 SOURCE_REV = "c8855bd"
 SOURCE_PATH = "simplified.ipynb"
 

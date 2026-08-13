@@ -9,7 +9,7 @@ from textwrap import dedent
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "nosnap_dl_ablation.ipynb"
+OUT = ROOT / "notebooks" / "nosnap_dl_ablation.ipynb"
 
 
 def md(source: str) -> dict:

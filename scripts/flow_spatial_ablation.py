@@ -8,8 +8,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "external_champion_train.ipynb"
-OUT = ROOT / "flow_spatial_ablation.ipynb"
+SOURCE = ROOT / "notebooks" / "external_champion_train.ipynb"
+OUT = ROOT / "notebooks" / "flow_spatial_ablation.ipynb"
 
 
 def lines(text: str) -> list[str]:
