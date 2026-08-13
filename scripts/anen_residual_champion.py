@@ -131,7 +131,8 @@ ANEN_ABSOLUTE_CV_FLOOR = 0.6490
 ANEN_MIN_CV_DELTA = 0.0003
 ANEN_MIN_POSITIVE_FOLDS = 3
 ANEN_MIN_HOLD_DELTA = -0.0050
-RUN_FINAL_IF_PASS = True
+# 제출 gate와 별개로 다양성 blend의 기준 예측은 항상 생성합니다.
+BUILD_FINAL_ANCHOR = True
 
 GROUP_CAPACITY = {1: 21600, 2: 21600, 3: 21000}
 GROUP_SCALES = {1: 0.98, 2: 0.98, 3: 0.97}
@@ -1022,10 +1023,11 @@ def make_submission(final_components, bias_map):
     )
 
 
-if not ANEN_GATE_PASS and RUN_FINAL_IF_PASS:
-    print("Gate REJECT: 마지막 제출권을 보호하기 위해 최종 학습을 실행하지 않습니다.")
-    print("summary.csv와 gate_decision.json을 먼저 확인하세요.")
+if not ANEN_GATE_PASS and not BUILD_FINAL_ANCHOR:
+    print("Gate REJECT: 최종 anchor 생성을 건너뜁니다.")
 else:
+    if not ANEN_GATE_PASS:
+        print("Gate REJECT이지만 다양성 blend용 내부 anchor를 생성합니다.")
     final_component_path = ANEN_CACHE_DIR / "final_components.parquet"
     final_bias_path = ANEN_CACHE_DIR / "final_bias.pkl"
     if final_component_path.exists() and final_bias_path.exists():

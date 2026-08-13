@@ -57,7 +57,7 @@ cells = [
 - 269개 환경 피처를 별도 context encoder에 통과
 - 발전량 CF의 5개 분위수를 직접 예측하며 잔차 LightGBM을 사용하지 않음
 - anchor는 고정하고 새 모델 비중을 최대 20%로 제한
-- full CV뿐 아니라 leave-one-fold-out meta OOF가 개선될 때만 제출 파일 생성
+- full CV·leave-one-fold-out meta OOF에서 실제 external 챔피언까지 이길 때만 제출 파일 생성
 - 직접 FiCR 위치 이동은 과거 검증에서 불안정했으므로 사용하지 않음
 ''',
         "div_intro",
@@ -93,6 +93,9 @@ ANCHOR_ROOT = DRIVE_ROOT / "hyejin_anen_residual_champion"
 ANCHOR_CACHE_DIR = ANCHOR_ROOT / "cache" / "pd16_v1"
 ANCHOR_OOF_PATH = ANCHOR_ROOT / "oof_anen_residual.parquet"
 ANCHOR_SUBMISSION_PATH = ANCHOR_ROOT / "submission_anen_residual_pd16.csv"
+REFERENCE_GBM_PATH = BASE_CACHE_DIR / "external_champion_gbm_v1.parquet"
+REFERENCE_DL_PATH = BASE_CACHE_DIR / "external_champion_dl_v1.parquet"
+REFERENCE_BIAS_PATH = BASE_CACHE_DIR / "external_champion_bias_v1.pkl"
 
 DIVERSITY_VERSION = "deepset_q5_v1"
 DIVERSITY_CACHE_DIR = CACHE_DIR / DIVERSITY_VERSION
@@ -117,6 +120,8 @@ PASS_MIN_META_DELTA = 0.0003
 PASS_MIN_POSITIVE_FOLDS = 3
 PASS_MIN_HOLD_DELTA = -0.0010
 PASS_MIN_NMAE_DELTA = -0.0005
+PASS_MIN_REFERENCE_CV_DELTA = 0.0003
+PASS_MIN_REFERENCE_META_DELTA = 0.0003
 
 assert len(CONTEXT_COLS) == 269
 assert len(CONTEXT_COLS) == len(set(CONTEXT_COLS))
@@ -124,11 +129,19 @@ assert ANCHOR_OOF_PATH.exists(), (
     "먼저 anen_residual_champion.ipynb의 검증 셀까지 완료하세요: "
     + str(ANCHOR_OOF_PATH)
 )
+assert ANCHOR_SUBMISSION_PATH.exists(), (
+    "먼저 수정된 anen_residual_champion.ipynb의 최종 anchor 생성 셀까지 "
+    "완료하세요: " + str(ANCHOR_SUBMISSION_PATH)
+)
+assert all(path.exists() for path in [
+    REFERENCE_GBM_PATH, REFERENCE_DL_PATH, REFERENCE_BIAS_PATH,
+]), "기존 external 챔피언 OOF 캐시가 없습니다."
 
 run_config = {
     "experiment": "DEEPSETS_DISTRIBUTION_DIVERSITY",
     "version": DIVERSITY_VERSION,
     "anchor": str(ANCHOR_OOF_PATH),
+    "champion_reference": "external champion OOF cache",
     "architecture": "permutation-invariant DeepSets plus context encoder",
     "target": "direct capacity factor quantiles",
     "quantiles": QUANTILE_LEVELS,
@@ -195,6 +208,40 @@ anchor_oof = anchor_oof[[
 ]].rename(columns={"pred_scaled": "anchor_pred"})
 assert anchor_oof[["target", "anchor_pred"]].notna().all().all()
 print("anchor OOF:", anchor_oof.shape)
+
+# 실제 팀 챔피언 OOF를 같은 fold·후처리로 복원합니다.
+reference_gbm = pd.read_parquet(REFERENCE_GBM_PATH)
+reference_dl = pd.read_parquet(REFERENCE_DL_PATH)
+reference_cache = reference_gbm.merge(
+    reference_dl, on=["fold", "group", "forecast_kst_dtm"], how="left"
+)
+with open(REFERENCE_BIAS_PATH, "rb") as stream:
+    reference_bias = pickle.load(stream)
+reference_parts = []
+for (fold_name, group), sub in reference_cache.groupby(
+    ["fold", "group"], sort=False
+):
+    sub = sub.sort_values("forecast_kst_dtm").copy()
+    capacity = GROUP_CAPACITY[int(group)]
+    combined_cf = (
+        0.65 * sub["gbm_cf"].to_numpy(dtype=float)
+        + 0.35 * sub["dl_q60"].to_numpy(dtype=float)
+    )
+    prediction = postprocess_simple(
+        combined_cf, capacity, sub["ws"].to_numpy(dtype=float), int(group),
+        reference_bias[fold_name], clip_lo=0.16, alpha=0.40,
+    )
+    reference_parts.append(
+        sub[["fold", "group", "forecast_kst_dtm", "target"]].assign(
+            external_pred=prediction
+        )
+    )
+reference_oof = pd.concat(reference_parts, ignore_index=True)
+reference_oof["forecast_kst_dtm"] = pd.to_datetime(
+    reference_oof["forecast_kst_dtm"]
+)
+assert reference_oof[["target", "external_pred"]].notna().all().all()
+print("external champion OOF:", reference_oof.shape)
 '''
 cells.append(markdown("### 12. Anchor OOF와 AnEn 멤버 캐시 정렬", "div_members_title"))
 cells.append(code(member_source, "div_members"))
@@ -513,8 +560,19 @@ assert np.allclose(
 model_frame = model_frame.rename(columns={"target_anchor": "target"}).drop(
     columns="target_direct"
 )
+model_frame = model_frame.merge(
+    reference_oof,
+    on=["fold", "group", "forecast_kst_dtm"],
+    how="inner", validate="one_to_one", suffixes=("", "_reference"),
+)
+assert len(model_frame) == len(anchor_oof) == len(reference_oof)
+assert np.allclose(
+    model_frame["target"], model_frame["target_reference"], equal_nan=True
+)
+model_frame = model_frame.drop(columns="target_reference")
 essential_oof_columns = [
-    "target", "anchor_pred", "q10", "q25", "q50", "q75", "q90",
+    "target", "anchor_pred", "external_pred",
+    "q10", "q25", "q50", "q75", "q90",
 ] + [
     f"partner_{point}_{operation}"
     for point in POINT_VARIANTS
@@ -631,6 +689,7 @@ for heldout_fold in CV_FOLDS:
 meta_oof = pd.concat(meta_parts, ignore_index=True)
 meta_anchor_score = official_score(meta_oof, meta_oof["anchor_pred"])
 meta_candidate_score = official_score(meta_oof, meta_oof["meta_pred"])
+meta_reference_score = official_score(meta_oof, meta_oof["external_pred"])
 
 cv_frame = model_frame.loc[model_frame["fold"].isin(CV_FOLDS)].copy()
 cv_frame["selected_pred"] = candidate_prediction(
@@ -642,22 +701,30 @@ hold_frame["selected_pred"] = candidate_prediction(
 )
 anchor_cv = official_score(cv_frame, cv_frame["anchor_pred"])
 candidate_cv = official_score(cv_frame, cv_frame["selected_pred"])
+reference_cv = official_score(cv_frame, cv_frame["external_pred"])
 anchor_hold = official_score(hold_frame, hold_frame["anchor_pred"])
 candidate_hold = official_score(hold_frame, hold_frame["selected_pred"])
+reference_hold = official_score(hold_frame, hold_frame["external_pred"])
 
 fold_rows = []
 for fold_name in CV_FOLDS:
     fold_frame = cv_frame.loc[cv_frame["fold"] == fold_name]
     anchor_result = official_score(fold_frame, fold_frame["anchor_pred"])
     candidate_result = official_score(fold_frame, fold_frame["selected_pred"])
+    reference_result = official_score(fold_frame, fold_frame["external_pred"])
     fold_rows.append({
         "fold": fold_name,
         "anchor_score": anchor_result[0],
+        "reference_score": reference_result[0],
         "candidate_score": candidate_result[0],
         "delta_score": candidate_result[0] - anchor_result[0],
+        "delta_vs_reference": candidate_result[0] - reference_result[0],
     })
 fold_scores = pd.DataFrame(fold_rows)
 positive_folds = int((fold_scores["delta_score"] > 0).sum())
+positive_reference_folds = int(
+    (fold_scores["delta_vs_reference"] > 0).sum()
+)
 
 partner_column = f"partner_{SELECTED_SPEC['point']}_{SELECTED_SPEC['operation']}"
 partner_correlation = float(
@@ -666,6 +733,9 @@ partner_correlation = float(
 cv_delta = float(candidate_cv[0] - anchor_cv[0])
 meta_delta = float(meta_candidate_score[0] - meta_anchor_score[0])
 hold_delta = float(candidate_hold[0] - anchor_hold[0])
+reference_cv_delta = float(candidate_cv[0] - reference_cv[0])
+reference_meta_delta = float(meta_candidate_score[0] - meta_reference_score[0])
+reference_hold_delta = float(candidate_hold[0] - reference_hold[0])
 
 DIVERSITY_GATE_PASS = bool(
     SELECTED_SPEC["alpha"] > 0
@@ -675,17 +745,29 @@ DIVERSITY_GATE_PASS = bool(
     and hold_delta >= PASS_MIN_HOLD_DELTA
     and candidate_cv[1] - anchor_cv[1] >= PASS_MIN_NMAE_DELTA
     and candidate_cv[2] - anchor_cv[2] > 0
+    and reference_cv_delta >= PASS_MIN_REFERENCE_CV_DELTA
+    and reference_meta_delta >= PASS_MIN_REFERENCE_META_DELTA
+    and positive_reference_folds >= PASS_MIN_POSITIVE_FOLDS
+    and reference_hold_delta >= PASS_MIN_HOLD_DELTA
+    and candidate_cv[1] - reference_cv[1] >= PASS_MIN_NMAE_DELTA
+    and candidate_cv[2] - reference_cv[2] > 0
 )
 
 summary = pd.DataFrame([
+    {"partition": "cv", "model": "external_champion", "Score": reference_cv[0],
+     "1-NMAE": reference_cv[1], "FiCR": reference_cv[2]},
     {"partition": "cv", "model": "anchor", "Score": anchor_cv[0],
      "1-NMAE": anchor_cv[1], "FiCR": anchor_cv[2]},
     {"partition": "cv", "model": "diversity_blend", "Score": candidate_cv[0],
      "1-NMAE": candidate_cv[1], "FiCR": candidate_cv[2]},
+    {"partition": "meta_cv", "model": "external_champion", "Score": meta_reference_score[0],
+     "1-NMAE": meta_reference_score[1], "FiCR": meta_reference_score[2]},
     {"partition": "meta_cv", "model": "anchor", "Score": meta_anchor_score[0],
      "1-NMAE": meta_anchor_score[1], "FiCR": meta_anchor_score[2]},
     {"partition": "meta_cv", "model": "diversity_blend", "Score": meta_candidate_score[0],
      "1-NMAE": meta_candidate_score[1], "FiCR": meta_candidate_score[2]},
+    {"partition": "hold", "model": "external_champion", "Score": reference_hold[0],
+     "1-NMAE": reference_hold[1], "FiCR": reference_hold[2]},
     {"partition": "hold", "model": "anchor", "Score": anchor_hold[0],
      "1-NMAE": anchor_hold[1], "FiCR": anchor_hold[2]},
     {"partition": "hold", "model": "diversity_blend", "Score": candidate_hold[0],
@@ -702,6 +784,12 @@ gate_decision = {
     "cv_delta_1_nmae": float(candidate_cv[1] - anchor_cv[1]),
     "cv_delta_ficr": float(candidate_cv[2] - anchor_cv[2]),
     "positive_cv_folds": positive_folds,
+    "reference_cv_delta_score": reference_cv_delta,
+    "reference_meta_delta_score": reference_meta_delta,
+    "reference_hold_delta_score": reference_hold_delta,
+    "reference_cv_delta_1_nmae": float(candidate_cv[1] - reference_cv[1]),
+    "reference_cv_delta_ficr": float(candidate_cv[2] - reference_cv[2]),
+    "positive_reference_folds": positive_reference_folds,
     "partner_anchor_correlation": partner_correlation,
     "thresholds": {
         "min_cv_delta": PASS_MIN_CV_DELTA,
@@ -709,6 +797,8 @@ gate_decision = {
         "min_positive_folds": PASS_MIN_POSITIVE_FOLDS,
         "min_hold_delta": PASS_MIN_HOLD_DELTA,
         "min_nmae_delta": PASS_MIN_NMAE_DELTA,
+        "min_reference_cv_delta": PASS_MIN_REFERENCE_CV_DELTA,
+        "min_reference_meta_delta": PASS_MIN_REFERENCE_META_DELTA,
     },
 }
 
@@ -807,7 +897,7 @@ def make_partner_submission(quantile_frame, point, operation):
 
 
 if not DIVERSITY_GATE_PASS:
-    print("Gate REJECT: 직접 모델과 최종 blend를 학습하지 않습니다.")
+    print("Gate REJECT: 최종 테스트 모델과 blend를 생성하지 않습니다.")
 else:
     assert ANCHOR_SUBMISSION_PATH.exists(), (
         "anchor 제출 파일이 없습니다. 수정된 anen_residual_champion.ipynb의 "
